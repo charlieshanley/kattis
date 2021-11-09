@@ -8,7 +8,10 @@
     flake-utils.lib.eachDefaultSystem (system:
     let
       pkgs = import nixpkgs { inherit system; };
-      inherit (pkgs) callPackage mkShell ghc ghcid cabal-install cabal2nix;
+      ghc = pkgs.haskellPackages.ghcWithPackages (ps: [
+        ps.QuickCheck
+      ]);
+      inherit (pkgs) callPackage mkShell ghcid cabal-install cabal2nix;
     in
       {
         devShell = mkShell {
