@@ -15,14 +15,10 @@ import           Data.List             (sortOn)
 import           Data.Text             (Text)
 import qualified Data.Text             as T
 import qualified Data.Text.IO          as T
-import           Data.Coerce           (Coercible, coerce)
 import           Text.Parsec           (Parsec, Stream, chainl1, char, count, digit, eof, letter, newline, parse, space, spaces, many1)
 
-newtype Paperwork = Paperwork Int
-    deriving newtype (Eq, Ord, Show, Enum, Num, Real, Integral, Bounded)
-
-newtype Price = Price Int
-    deriving newtype (Eq, Ord, Show, Enum, Num, Real, Integral, Bounded)
+type Paperwork = Int
+type Price     = Int
 
 data Situation = Situation { _situationCurrent :: Paperwork, _situationTarget :: Paperwork }
     deriving (Show)
@@ -42,21 +38,18 @@ op Pred = pred
 op Halve = (`div` 2)
 
 ----------
--- cost algorithm
+-- cost
 
 minimumCost :: Situation -> Agency -> Price
-minimumCost (Situation initial target) (Agency _ opPrice) = go initial (Price 0)
+minimumCost (Situation initial target) (Agency _ opPrice) = halves * opPrice Halve + preds * opPrice Pred
   where
-    go :: Paperwork -> Price -> Price
-    go !current !accCost | current <= target = accCost
-      | op Halve current < target = next Pred
-      | ppu Pred < ppu Halve      = next Pred
-      | otherwise                 = next Halve
-      where
-        next o = go (op o current) (accCost + opPrice o)
+    breakeven = 2 * fromIntegral (opPrice Halve) / fromIntegral (opPrice Pred)
+    stopHalving = max (2 * fromIntegral target) breakeven
+    -- via loose algebra starting from: initial / 2^halves >= stopHalving
+    halves = ceiling $ max 0 $ log (fromIntegral initial / stopHalving) / log 2
+    remainderAfterHalving = initial `div` 2^halves
+    preds = remainderAfterHalving - target
 
-        ppu Pred  = fromIntegral $ opPrice Pred
-        ppu Halve = fromIntegral (opPrice Halve) / fromIntegral (current - op Halve current)
 
 ----------
 -- parsing
@@ -69,9 +62,6 @@ p_input = do
 p_nat :: Parsec Text () Int
 p_nat = chainl1 (digitToInt <$> digit) (pure (\(!x) (!y) -> x * 10 + y))
 
-p_natlike :: (Coercible a Int)  => Parsec Text () a
-p_natlike = coerce <$> p_nat
-
 p_case :: Parsec Text () Case
 p_case = do
     situation <- p_situation <* space
@@ -80,11 +70,11 @@ p_case = do
     pure $ Case situation agencies
 
 p_situation :: Parsec Text () Situation
-p_situation = Situation <$> p_natlike <*> (space *> p_natlike)
+p_situation = Situation <$> p_nat <*> (space *> p_nat)
 
 p_agency :: Parsec Text () Agency
 p_agency = Agency <$> (T.pack <$> many1 letter <* char ':')
-                  <*> (priceFun <$> p_natlike <* char ',' <*> p_natlike)
+                  <*> (priceFun <$> p_nat <* char ',' <*> p_nat)
                   <*  newline
 
 priceFun :: Price -> Price -> Op -> Price
