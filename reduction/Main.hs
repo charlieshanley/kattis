@@ -21,35 +21,38 @@ type Paperwork = Int
 type Price     = Int
 
 data Situation = Situation { _situationCurrent :: Paperwork, _situationTarget :: Paperwork }
-    deriving (Show)
+    deriving (Show, Eq)
 
 data Op = Pred | Halve
 
 data Agency = Agency { _agencyName :: Text, _agencyOpPrice :: Op -> Price }
 
+instance Eq Agency where
+    a == b = f a == f b
+        where f (Agency nm opPrice) = (nm, opPrice Halve, opPrice Pred)
+
 instance Show Agency where
     show (Agency nm opPrice) = "Agency " <> T.unpack nm <> show (opPrice Pred, opPrice Halve)
 
 data Case = Case { _caseSituation :: Situation, _caseAgencies :: [Agency] }
-    deriving (Show)
-
-op :: Op -> Paperwork -> Paperwork
-op Pred = pred
-op Halve = (`div` 2)
+    deriving (Show, Eq)
 
 ----------
 -- cost
 
 minimumCost :: Situation -> Agency -> Price
-minimumCost (Situation initial target) (Agency _ opPrice) = halves * opPrice Halve + preds * opPrice Pred
+minimumCost (Situation initial target) (Agency _ opPrice) = go initial 0
   where
-    breakeven = 2 * fromIntegral (opPrice Halve) / fromIntegral (opPrice Pred)
-    stopHalving = max (2 * fromIntegral target) breakeven
-    -- via loose algebra starting from: initial / 2^halves >= stopHalving
-    halves = ceiling $ max 0 $ log (fromIntegral initial / stopHalving) / log 2
-    remainderAfterHalving = initial `div` 2^halves
-    preds = remainderAfterHalving - target
-
+    go :: Paperwork -> Price -> Price
+    go !current !accCost
+      | finished = accCost
+      | halveOvershoots || predBetterValue = accCost + opPrice Pred * (current - target)
+      | otherwise = go halved (accCost + opPrice Halve)
+      where
+        finished = current <= target
+        halved = current `div` 2
+        halveOvershoots = halved < target
+        predBetterValue = opPrice Pred * (current - halved) < opPrice Halve
 
 ----------
 -- parsing
