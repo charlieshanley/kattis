@@ -31,8 +31,8 @@ nPaths :: NSteps -> Int
 nPaths n = pathMap Map.! ((0, 0), n)
 
 minStepsHome :: Position -> NSteps
-minStepsHome position = east + (max 0 (north - east) `div` 2)
-  where (north, east) = bimap abs abs position
+minStepsHome position = eastWest + (max 0 (northSouth - eastWest) `div` 2)
+  where (northSouth, eastWest) = bimap abs abs position
 
 move :: Direction -> Position -> Position
 move N  = first $ succ.succ
