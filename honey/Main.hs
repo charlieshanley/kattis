@@ -1,18 +1,23 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+-- https://open.kattis.com/problems/honey
+--
+-- A bee larva living in a hexagonal cell of a large honeycomb decides to creep
+-- for a walk. In each “step” the larva may move into any of the six adjacent
+-- cells and after n steps, it is to end up in its original cell.
+-- Your program has to compute, for a given n, the number of different such larva walks.
 
-import Control.Arrow      ((>>>))
-import Control.Monad      (replicateM, guard)
-import Data.Bifunctor     (bimap, first, second)
-import Data.Foldable      (foldl')
+
+{-# LANGUAGE LambdaCase #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
+
+import Data.Bifunctor     (bimap, first)
 import qualified Data.Map as Map
 import           Data.Map (Map)
 import qualified Data.Set as Set
 import           Data.Set (Set)
 
 main :: IO ()
-main = interact $ lines >>> drop 1 >>> fmap (show . nPaths . read) >>> unlines
+main = interact $ unlines . fmap (show . nPaths . read) . drop 1 . lines
 
 ----------
 
@@ -26,7 +31,8 @@ nPaths :: NSteps -> Int
 nPaths n = pathMap Map.! ((0, 0), n)
 
 minStepsHome :: Position -> NSteps
-minStepsHome = bimap abs abs >>> \(n, e) -> e + (max 0 (n - e) `div` 2)
+minStepsHome position = east + (max 0 (north - east) `div` 2)
+  where (north, east) = bimap abs abs position
 
 move :: Direction -> Position -> Position
 move N  = first $ succ.succ
