@@ -6,62 +6,85 @@
 -- Your program has to compute, for a given n, the number of different such larva walks.
 
 
-{-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
 
-import Data.Bifunctor     (bimap, first)
-import qualified Data.Map as Map
-import           Data.Map (Map)
-import qualified Data.Set as Set
-import           Data.Set (Set)
+import Dict (Dict)
+import qualified Dict
+import Platform (DoAnythingHandler, doAnything)
 
-main :: IO ()
-main = interact $ unlines . fmap (show . nPaths . read) . drop 1 . lines
+import Prelude (interact, lines, unlines, read, show, drop, error)
+import NriPrelude hiding (e)
+
+mainTask :: DoAnythingHandler -> Task Never ()
+mainTask handler = do
+  let io = interact <| unlines << fmap (show << nPaths << read) << drop 1 << lines
+  doAnything handler (map Ok io)
 
 ----------
 
 data Direction = N | NE | SE | S | SW | NW
-    deriving (Eq, Show, Enum, Bounded)
+    deriving (Eq, Show)
 
 type Position = (Int, Int)
 type NSteps = Int
 
 nPaths :: NSteps -> Int
-nPaths n = pathMap Map.! ((0, 0), n)
+nPaths n = getPartial ((0, 0), n) pathMap
+
+getPartial :: ( Ord k ) => k -> Dict k v -> v
+getPartial k dict =
+  case Dict.get k dict of
+    Just v -> v
+    Nothing -> error "pay no attention..."
 
 minStepsHome :: Position -> NSteps
-minStepsHome position = eastWest + (max 0 (northSouth - eastWest) `div` 2)
-  where (northSouth, eastWest) = bimap abs abs position
+minStepsHome (north, east) =
+  let northSouth = abs north
+      eastWest = abs east
+   in eastWest + (max 0 (northSouth - eastWest) // 2)
 
-move :: Direction -> Position -> Position
-move N  = first $ succ.succ
-move NE = bimap succ succ
-move SE = bimap pred succ
-move S  = first $ pred.pred
-move SW = bimap pred pred
-move NW = bimap succ pred
+move :: Position -> Direction -> Position
+move (n, e) N  = (n + 2, e)
+move (n, e) NE = (n + 1, e + 1)
+move (n, e) SE = (n + 1, e - 1)
+move (n, e) S  = (n - 2, e)
+move (n, e) SW = (n - 1, e - 1)
+move (n, e) NW = (n + 1, e - 1)
 
 directions :: [Direction]
-directions = [minBound .. maxBound]
+directions = [N, NE, SE, S, SW, NW]
 
-pathMap :: Map (Position, NSteps) Int
-pathMap = flip Map.fromSet keys $ \case
-    ((0, 0), 0) -> 1
-    (pos, nSteps)
-      | minStepsHome pos > nSteps -> 0
-      | otherwise -> sum $ do
-          direction <- directions
-          let pos' = move direction pos
-          pure $ pathMap Map.! (pos', pred nSteps)
+cartesianProduct :: List a -> List b -> List (a, b)
+cartesianProduct as bs =
+  as |> List.concatMap (\a -> bs |> List.map (\b -> (a, b)))
 
--- larger than it needs to be, but no matter
-keys :: Set (Position, NSteps)
-keys = Set.fromList $ do
-    n <- [-maxPath*2 .. maxPath*2]
-    e <- [-maxPath .. maxPath]
-    nSteps <- [0 .. maxPath]
-    pure ((n, e), nSteps)
+-- Pretend this is a lazy Dict
+pathMap :: Dict (Position, NSteps) Int
+pathMap =
+  let
+    norths = List.range (-maxPath*2) (maxPath*2)
+    easts = List.range (-maxPath) (maxPath)
+    positions = cartesianProduct norths easts
+    nStepss = List.range 0 maxPath
+    keys = cartesianProduct positions nStepss
+   in
+    keys
+      |> List.map
+        (\(pos :: Position, nSteps :: NSteps) ->
+          ( (pos, nSteps)
+          , if (pos, nSteps) == ((0, 0), 0)
+               then 1
+               else if minStepsHome pos > nSteps
+                       then 0
+                       else
+                        directions
+                          |> List.map (\direction -> move pos direction)
+                          |> List.map (\newPos -> getPartial (newPos, nSteps - 1) pathMap)
+                          |> List.sum
+          )
+        )
+    |> Dict.fromList
 
 maxPath :: NSteps
 maxPath = 20
